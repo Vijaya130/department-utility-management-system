@@ -54,9 +54,7 @@ The application is designed for the **ISE Department** to simplify student, facu
 - **Shaarwari**
 - **Varsha**
 - **Shravya K**
-- **Ananya**
-- **Shravani**
-- **Devika**
+  
 
 ---
 
