@@ -69,6 +69,10 @@ const [facultySearchQuery, setFacultySearchQuery] = useState('')
 const [facultySearchResult, setFacultySearchResult] = useState(null)
 const [searchQuery, setSearchQuery] = useState('')
 const [searchResult, setSearchResult] = useState(null)
+const [hodSearchQuery, setHodSearchQuery] = useState('')
+const [hodSearchResult, setHodSearchResult] = useState(null)
+const [certificateSearchQuery, setCertificateSearchQuery] = useState('')
+const [certificateResults, setCertificateResults] = useState([])
 const handleStudentChange = (e) => {
   setStudentForm({
     ...studentForm,
@@ -346,6 +350,55 @@ const handleSearch = async () => {
   } else {
     setSearchResult(data[0])
     setEditingStudentIndex(data[0].id)
+  }
+}
+const handleHodSearch = async () => {
+  if (!hodSearchQuery) {
+    alert('Enter student name or USN')
+    return
+  }
+
+  const { data, error } = await supabase
+    .from('students')
+    .select('*')
+    .or(`fullName.ilike.%${hodSearchQuery}%,usn.ilike.%${hodSearchQuery}%`)
+
+  if (error) {
+    console.error(error)
+    alert('Error searching student records')
+    return
+  }
+
+  if (data.length === 0) {
+    alert('No student found')
+    setHodSearchResult(null)
+  } else {
+    setHodSearchResult(data[0])
+  }
+}
+const handleCertificateSearch = async () => {
+  if (!certificateSearchQuery) {
+    alert('Enter student name or USN')
+    return
+  }
+
+  const { data, error } = await supabase
+    .from('certificates')
+    .select('*')
+    .or(
+      `student_name.ilike.%${certificateSearchQuery}%,usn.ilike.%${certificateSearchQuery}%`
+    )
+
+  if (error) {
+    console.error(error)
+    alert('Error searching certificates')
+    return
+  }
+
+  setCertificateResults(data || [])
+
+  if (!data || data.length === 0) {
+    alert('No certificates found for this student')
   }
 }
 const handleEditStudent = () => {
@@ -759,19 +812,18 @@ const handleMenteeClick = async (studentName) => {
             <button
               type="button"
               className="search-btn"
-              onClick={() => alert('Student Records module coming next')}
+             onClick={() => setActiveSection('HODStudentRecords')}
             >
                Student Records
             </button>
 
             <button
-              type="button"
-              className="search-btn"
-              onClick={() => alert('Certificates module coming next')}
-            >
-               Certificates
-            </button>
-
+  type="button"
+  className="search-btn"
+  onClick={() => setActiveSection('HODCertificates')}
+>
+   Certificates
+</button>
             <button
               type="button"
               className="search-btn"
@@ -789,6 +841,223 @@ const handleMenteeClick = async (studentName) => {
             </button>
 
           </div>
+
+        </div>
+      </div>
+    </div>
+  )
+}
+if (activeSection === 'HODStudentRecords') {
+  return (
+    <div className="student-page">
+      <div className="student-form-wrapper">
+        <div className="student-form-card">
+
+          <h1 className="main-title">
+            HOD Student Records
+          </h1>
+
+          <p className="sub-title">
+            View student information and academic records
+          </p>
+
+          <h2 className="section-heading">
+            🔍 Search Student
+          </h2>
+
+          <div className="search-by-wrapper">
+            <input
+              type="text"
+              placeholder="Search by Name or USN"
+              value={hodSearchQuery}
+              onChange={(e) => setHodSearchQuery(e.target.value)}
+            />
+
+            <button
+              type="button"
+              onClick={handleHodSearch}
+              className="search-btn"
+            >
+              Search
+            </button>
+          </div>
+
+          {hodSearchResult && (
+            <div className="result-card">
+
+              <h2 className="section-heading">
+                Student Details
+              </h2>
+
+              <p>
+                <b>Name:</b> {hodSearchResult.fullName}
+              </p>
+
+              <p>
+                <b>USN:</b> {hodSearchResult.usn}
+              </p>
+
+              <p>
+                <b>Year:</b> {hodSearchResult.year}
+              </p>
+
+              <p>
+                <b>Branch:</b> {hodSearchResult.branch}
+              </p>
+
+              <p>
+                <b>Email:</b> {hodSearchResult.email || 'N/A'}
+              </p>
+
+              <p>
+                <b>Phone:</b> {hodSearchResult.phone || 'N/A'}
+              </p>
+
+              <p>
+                <b>10th Marks:</b> {hodSearchResult.tenthMarks || 'N/A'}
+              </p>
+
+              <p>
+                <b>12th / Diploma Marks:</b> {hodSearchResult.twelvethMarks || 'N/A'}
+              </p>
+
+              <p>
+                <b>Semester 1:</b> {hodSearchResult.sem1 || 'N/A'}
+              </p>
+
+              <p>
+                <b>Semester 2:</b> {hodSearchResult.sem2 || 'N/A'}
+              </p>
+
+              <p>
+                <b>Semester 3:</b> {hodSearchResult.sem3 || 'N/A'}
+              </p>
+
+              <p>
+                <b>Semester 4:</b> {hodSearchResult.sem4 || 'N/A'}
+              </p>
+
+              <p>
+                <b>Semester 5:</b> {hodSearchResult.sem5 || 'N/A'}
+              </p>
+
+              <p>
+                <b>Semester 6:</b> {hodSearchResult.sem6 || 'N/A'}
+              </p>
+
+              <p>
+                <b>Semester 7:</b> {hodSearchResult.sem7 || 'N/A'}
+              </p>
+
+              <p>
+                <b>Semester 8:</b> {hodSearchResult.sem8 || 'N/A'}
+              </p>
+
+              <p>
+                <b>Backlogs:</b> {hodSearchResult.backlogs || '0'}
+              </p>
+
+              <p>
+                <b>Achievements:</b> {hodSearchResult.achievements || 'N/A'}
+              </p>
+
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  )
+}
+if (activeSection === 'HODCertificates') {
+  return (
+    <div className="student-page">
+      <div className="student-form-wrapper">
+        <div className="student-form-card">
+
+          <h1 className="main-title">
+            Student Certificates
+          </h1>
+
+          <p className="sub-title">
+            View certificates earned by students
+          </p>
+
+          <h2 className="section-heading">
+             Search Certificates
+          </h2>
+
+          <div className="search-by-wrapper">
+            <input
+              type="text"
+              placeholder="Search by Student Name or USN"
+              value={certificateSearchQuery}
+              onChange={(e) =>
+                setCertificateSearchQuery(e.target.value)
+              }
+            />
+
+            <button
+              type="button"
+              className="search-btn"
+              onClick={handleCertificateSearch}
+            >
+              Search
+            </button>
+          </div>
+
+          {certificateResults.length > 0 && (
+            <div className="result-card">
+
+              <h2 className="section-heading">
+                Certificate Records
+              </h2>
+
+              {certificateResults.map((certificate) => (
+                <div
+                  key={certificate.id}
+                  className="result-card"
+                  style={{ marginBottom: '15px' }}
+                >
+                  <p>
+                    <b>Student:</b>{' '}
+                    {certificate.student_name || 'N/A'}
+                  </p>
+
+                  <p>
+                    <b>USN:</b>{' '}
+                    {certificate.usn || 'N/A'}
+                  </p>
+
+                  <p>
+                    <b>Certificate:</b>{' '}
+                    {certificate.certificate_name || 'N/A'}
+                  </p>
+
+                  <p>
+                    <b>Category:</b>{' '}
+                    {certificate.category || 'N/A'}
+                  </p>
+
+                  <p>
+                    <b>Issuing Organization:</b>{' '}
+                    {certificate.issuing_organization || 'N/A'}
+                  </p>
+
+                  <p>
+                    <b>Issue Date:</b>{' '}
+                    {certificate.issue_date || 'N/A'}
+                  </p>
+
+                  <p>
+                    <b>Description:</b>{' '}
+                    {certificate.description || 'N/A'}
+                  </p>
+                </div>
+              ))}
+
+            </div>
+          )}
 
         </div>
       </div>
@@ -1418,6 +1687,20 @@ if (activeSection === 'Notices') {
       Dashboard
     </button>
 
+    <button
+      className={`nav-button ${activeSection === 'HODStudentRecords' ? 'active' : ''}`}
+      onClick={() => setActiveSection('HODStudentRecords')}
+    >
+       Student Records
+    </button>
+<button
+  className={`nav-button ${
+    activeSection === 'HODCertificates' ? 'active' : ''
+  }`}
+  onClick={() => setActiveSection('HODCertificates')}
+>
+   Certificates
+</button>
     <button
       className={`nav-button ${activeSection === 'Analytics' ? 'active' : ''}`}
       onClick={() => setActiveSection('Analytics')}
