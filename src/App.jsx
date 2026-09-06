@@ -534,6 +534,8 @@ const handleLogin = () => {
 
   if (role === 'Admin') {
     setActiveSection('Dashboard')
+  } else if (role === 'HOD') {
+    setActiveSection('HOD')
   } else if (role === 'Mentor') {
     setActiveSection('Mentor')
   }
@@ -555,8 +557,9 @@ const renderLoginPage = () => {
         <label>Select Role</label>
         <select value={role} onChange={(e) => setRole(e.target.value)}>
           <option value="">Choose Role</option>
-          <option value="Admin">Admin</option>
-          <option value="Mentor">Mentor</option>
+<option value="Admin">Admin</option>
+<option value="HOD">HOD</option>
+<option value="Mentor">Mentor</option>
         </select>
 
         {role === 'Mentor' && (
@@ -694,6 +697,99 @@ const handleMenteeClick = async (studentName) => {
     </button>
   )}
 </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+    if (activeSection === 'HOD') {
+  return (
+    <div className="student-page">
+      <div className="student-form-wrapper">
+        <div className="student-form-card">
+
+          <h1 className="main-title">
+            HOD Dashboard
+          </h1>
+
+          <p className="sub-title">
+            Department Overview - ISE Department
+          </p>
+
+          <div className="dashboard-cards">
+
+            <div className="dashboard-card">
+              <h3>Total Students</h3>
+              <p>{dashboardCounts.students}</p>
+            </div>
+
+            <div className="dashboard-card">
+              <h3>Total Faculty</h3>
+              <p>{dashboardCounts.faculty}</p>
+            </div>
+
+            <div className="dashboard-card">
+              <h3>Total Mentors</h3>
+              <p>{dashboardCounts.mentors}</p>
+            </div>
+
+            <div className="dashboard-card">
+              <h3>Total Notices</h3>
+              <p>{dashboardCounts.notices}</p>
+            </div>
+
+          </div>
+
+          <div className="section-divider"></div>
+
+          <h2 className="section-heading">
+            HOD Access
+          </h2>
+
+          <div className="dashboard-actions">
+
+            <button
+              type="button"
+              className="search-btn"
+              onClick={() => setActiveSection('Analytics')}
+            >
+               View Analytics
+            </button>
+
+            <button
+              type="button"
+              className="search-btn"
+              onClick={() => alert('Student Records module coming next')}
+            >
+               Student Records
+            </button>
+
+            <button
+              type="button"
+              className="search-btn"
+              onClick={() => alert('Certificates module coming next')}
+            >
+               Certificates
+            </button>
+
+            <button
+              type="button"
+              className="search-btn"
+              onClick={() => alert('Placements module coming next')}
+            >
+               Placements
+            </button>
+
+            <button
+              type="button"
+              className="search-btn"
+              onClick={() => alert('Extracurricular module coming next')}
+            >
+               Extracurricular Activities
+            </button>
+
+          </div>
+
         </div>
       </div>
     </div>
@@ -1313,7 +1409,23 @@ if (activeSection === 'Notices') {
     </button>
   </>
 )}
+{role === 'HOD' && (
+  <>
+    <button
+      className={`nav-button ${activeSection === 'HOD' ? 'active' : ''}`}
+      onClick={() => setActiveSection('HOD')}
+    >
+      Dashboard
+    </button>
 
+    <button
+      className={`nav-button ${activeSection === 'Analytics' ? 'active' : ''}`}
+      onClick={() => setActiveSection('Analytics')}
+    >
+       Analytics
+    </button>
+  </>
+)}
           <button className="nav-button" onClick={handleLogout}>
             Logout
           </button>
