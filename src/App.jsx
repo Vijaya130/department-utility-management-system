@@ -59,6 +59,8 @@ const [dashboardCounts, setDashboardCounts] = useState({
   mentors: 0,
   notices: 0
 })
+const [placementData, setPlacementData] = useState([])
+const [extracurricularData, setExtracurricularData] = useState([])
 const [isLoggedIn, setIsLoggedIn] = useState(false)
 const [role, setRole] = useState('')
 const [loggedInMentor, setLoggedInMentor] = useState('')
@@ -560,17 +562,68 @@ const fetchDashboardCounts = async () => {
     .from('notices')
     .select('*', { count: 'exact', head: true })
 
-  if (studentError || facultyError || noticeError) {
-    console.error(studentError || facultyError || noticeError)
+  const { data: mentorData, error: mentorError } = await supabase
+    .from('mentorMentee')
+    .select('mentor')
+
+  if (studentError || facultyError || noticeError || mentorError) {
+    console.error(
+      studentError ||
+      facultyError ||
+      noticeError ||
+      mentorError
+    )
     return
   }
+
+
+  const uniqueMentors = [
+    ...new Set(
+      (mentorData || [])
+        .map(item => item.mentor)
+        .filter(Boolean)
+    )
+  ]
 
   setDashboardCounts({
     students: studentCount || 0,
     faculty: facultyCount || 0,
-    mentors: mentordata.length,
+    mentors: uniqueMentors.length,
     notices: noticeCount || 0
   })
+}
+const fetchPlacements = async () => {
+  const { data, error } = await supabase
+    .from('placements')
+    .select('*')
+    .order('id', { ascending: true })
+
+  console.log('PLACEMENT DATA:', data)
+  console.log('PLACEMENT ERROR:', error)
+
+  if (error) {
+    console.error(error)
+    alert('Error fetching placement details: ' + error.message)
+    return
+  }
+
+  alert('Placement records fetched: ' + (data?.length || 0))
+
+  setPlacementData(data || [])
+}
+const fetchExtracurriculars = async () => {
+  const { data, error } = await supabase
+    .from('extracurriculars')
+    .select('*')
+    .order('id', { ascending: true })
+
+  if (error) {
+    console.error(error)
+    alert('Error fetching extracurricular details: ' + error.message)
+    return
+  }
+
+  setExtracurricularData(data || [])
 }
 const handleLogin = () => {
   if (!role) {
@@ -586,12 +639,14 @@ const handleLogin = () => {
   setIsLoggedIn(true)
 
   if (role === 'Admin') {
-    setActiveSection('Dashboard')
-  } else if (role === 'HOD') {
-    setActiveSection('HOD')
-  } else if (role === 'Mentor') {
-    setActiveSection('Mentor')
-  }
+  setActiveSection('Dashboard')
+  fetchDashboardCounts()
+} else if (role === 'HOD') {
+  setActiveSection('HOD')
+  fetchDashboardCounts()
+} else if (role === 'Mentor') {
+  setActiveSection('Mentor')
+}
 }
 
 const handleLogout = () => {
@@ -824,21 +879,26 @@ const handleMenteeClick = async (studentName) => {
 >
    Certificates
 </button>
+           <button
+  type="button"
+  className="search-btn"
+  onClick={() => {
+    setActiveSection('HODPlacements')
+    fetchPlacements()
+  }}
+>
+  Placements
+</button>
             <button
-              type="button"
-              className="search-btn"
-              onClick={() => alert('Placements module coming next')}
-            >
-               Placements
-            </button>
-
-            <button
-              type="button"
-              className="search-btn"
-              onClick={() => alert('Extracurricular module coming next')}
-            >
-               Extracurricular Activities
-            </button>
+  type="button"
+  className="search-btn"
+  onClick={() => {
+    setActiveSection('HODExtracurriculars')
+    fetchExtracurriculars()
+  }}
+>
+  Extracurricular Activities
+</button>
 
           </div>
 
@@ -963,6 +1023,144 @@ if (activeSection === 'HODStudentRecords') {
 
             </div>
           )}
+
+        </div>
+      </div>
+    </div>
+  )
+}
+if (activeSection === 'HODPlacements') {
+  return (
+    <div className="student-page">
+      <div className="student-form-wrapper">
+        <div className="student-form-card">
+
+          <h1 className="main-title">
+            Student Placements
+          </h1>
+
+          <p className="sub-title">
+            View placement records of students
+          </p>
+
+          <h2 className="section-heading">
+            Placement Records
+          </h2>
+
+          {placementData.length > 0 ? (
+            placementData.map((placement) => (
+              <div
+                key={placement.id}
+                className="result-card"
+                style={{ marginBottom: '15px' }}
+              >
+                <p>
+                  <b>Student:</b> {placement.student_name || 'N/A'}
+                </p>
+
+                <p>
+                  <b>USN:</b> {placement.usn || 'N/A'}
+                </p>
+
+                <p>
+                  <b>Company:</b> {placement.company || 'N/A'}
+                </p>
+
+                <p>
+                  <b>Package:</b> {placement.package || 'N/A'}
+                </p>
+
+                <p>
+                  <b>Placement Year:</b> {placement.placement_year || 'N/A'}
+                </p>
+
+                <p>
+                  <b>Status:</b> {placement.status || 'N/A'}
+                </p>
+              </div>
+            ))
+          ) : (
+            <div className="result-card">
+              <p>No placement records found.</p>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="search-btn"
+            onClick={() => setActiveSection('HOD')}
+          >
+             Back to HOD Dashboard
+          </button>
+
+        </div>
+      </div>
+    </div>
+  )
+}
+if (activeSection === 'HODExtracurriculars') {
+  return (
+    <div className="student-page">
+      <div className="student-form-wrapper">
+        <div className="student-form-card">
+
+          <h1 className="main-title">
+            Extracurricular Activities
+          </h1>
+
+          <p className="sub-title">
+            View student extracurricular activities and achievements
+          </p>
+
+          <h2 className="section-heading">
+            Extracurricular Records
+          </h2>
+
+          {extracurricularData.length > 0 ? (
+            extracurricularData.map((activity) => (
+              <div
+                key={activity.id}
+                className="result-card"
+                style={{ marginBottom: '15px' }}
+              >
+                <p>
+                  <b>Student:</b> {activity.student_name || 'N/A'}
+                </p>
+
+                <p>
+                  <b>USN:</b> {activity.usn || 'N/A'}
+                </p>
+
+                <p>
+                  <b>Activity:</b> {activity.activity || 'N/A'}
+                </p>
+
+                <p>
+                  <b>Category:</b> {activity.category || 'N/A'}
+                </p>
+
+                <p>
+                  <b>Achievement:</b> {activity.achievement || 'N/A'}
+                </p>
+
+                <p>
+                  <b>Year:</b> {activity.year || 'N/A'}
+                </p>
+              </div>
+            ))
+          ) : (
+            <div className="result-card">
+              <p>No extracurricular records found.</p>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="search-btn"
+            onClick={() => setActiveSection('HOD')}
+          >
+            ← Back to HOD Dashboard
+          </button>
 
         </div>
       </div>
@@ -1700,6 +1898,29 @@ if (activeSection === 'Notices') {
   onClick={() => setActiveSection('HODCertificates')}
 >
    Certificates
+</button>
+<button
+  className={`nav-button ${
+    activeSection === 'HODPlacements' ? 'active' : ''
+  }`}
+  onClick={() => {
+    setActiveSection('HODPlacements')
+    fetchPlacements()
+  }}
+>
+  Placements
+</button>
+
+<button
+  className={`nav-button ${
+    activeSection === 'HODExtracurriculars' ? 'active' : ''
+  }`}
+  onClick={() => {
+    setActiveSection('HODExtracurriculars')
+    fetchExtracurriculars()
+  }}
+>
+  Extracurricular Activities
 </button>
     <button
       className={`nav-button ${activeSection === 'Analytics' ? 'active' : ''}`}
