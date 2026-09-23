@@ -53,6 +53,14 @@ const [noticeForm, setNoticeForm] = useState({
   audience: '',
   date: ''
 })
+const [circularForm, setCircularForm] = useState({
+  title: '',
+  content: '',
+  target: '',
+  image: null
+})
+
+const [circulars, setCirculars] = useState([])
 const [dashboardCounts, setDashboardCounts] = useState({
   students: 0,
   faculty: 0,
@@ -295,10 +303,10 @@ const handleStudentSubmit = async (e) => {
       .insert([studentData])
 
     if (error) {
-      console.error(error)
-      alert('Error saving student data')
-      return
-    }
+  console.error('STUDENT SAVE ERROR:', error)
+  alert('Error saving student data: ' + error.message)
+  return
+}
 
     alert('Student saved successfully!')
   }
@@ -484,6 +492,12 @@ const handleNoticeChange = (e) => {
     [e.target.name]: e.target.value
   })
 }
+const handleCircularChange = (e) => {
+  setCircularForm({
+    ...circularForm,
+    [e.target.name]: e.target.value
+  })
+}
 
 const handleNoticeSubmit = async (e) => {
   e.preventDefault()
@@ -515,6 +529,83 @@ const handleNoticeSubmit = async (e) => {
   })
 
   fetchNotices()
+}
+const handleCircularSubmit = async (e) => {
+  e.preventDefault()
+
+  if (!circularForm.title || !circularForm.content || !circularForm.target) {
+    alert('Please fill all circular fields')
+    return
+  }
+
+  let imageUrl = null
+
+  // Upload image if one was selected
+  if (circularForm.image) {
+    const file = circularForm.image
+    const fileName = `${Date.now()}-${file.name}`
+
+    const { error: uploadError } = await supabase
+      .storage
+      .from('circular-images')
+      .upload(fileName, file)
+
+    if (uploadError) {
+      console.error(uploadError)
+      alert('Error uploading circular image: ' + uploadError.message)
+      return
+    }
+
+    const { data: publicUrlData } = supabase
+      .storage
+      .from('circular-images')
+      .getPublicUrl(fileName)
+
+    imageUrl = publicUrlData.publicUrl
+  }
+
+  const circularData = {
+    title: circularForm.title,
+    content: circularForm.content,
+    target: circularForm.target,
+    created_by: role,
+    image_url: imageUrl
+  }
+
+  const { error } = await supabase
+    .from('circulars')
+    .insert([circularData])
+
+  if (error) {
+    console.error(error)
+    alert('Error saving circular: ' + error.message)
+    return
+  }
+
+  alert('Circular added successfully!')
+
+  setCircularForm({
+    title: '',
+    content: '',
+    target: '',
+    image: null
+  })
+
+  fetchCirculars()
+}
+const fetchCirculars = async () => {
+  const { data, error } = await supabase
+    .from('circulars')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error(error)
+    alert('Error fetching circulars: ' + error.message)
+    return
+  }
+
+  setCirculars(data || [])
 }
 
 const fetchNotices = async () => {
@@ -801,11 +892,133 @@ const handleMenteeClick = async (studentName) => {
       onClick={() => setActiveSection('Analytics')}
       style={{ background: 'linear-gradient(135deg, #1565c0, #42a5f5)', color: '#fff', fontWeight: 700 }}
     >
-      📊 Analytics Dashboard
+       Analytics Dashboard
     </button>
   )}
 </div>
         </div>
+      </div>
+    </div>
+  )
+}
+if (activeSection === 'Circulars') {
+  return (
+    <div className="student-page">
+      <div className="student-form-wrapper">
+
+        <div className="student-form-card">
+          <h1 className="main-title">Circulars</h1>
+          <p className="sub-title">
+            Department Circulars and Announcements
+          </p>
+
+          {(role === 'Admin' || role === 'HOD') && (
+            <>
+              <h2 className="section-heading">Create Circular</h2>
+
+              <form onSubmit={handleCircularSubmit}>
+
+                <input
+                  type="text"
+                  name="title"
+                  placeholder="Circular Title"
+                  value={circularForm.title}
+                  onChange={handleCircularChange}
+                />
+
+                <textarea
+                  name="content"
+                  placeholder="Circular Content"
+                  rows="5"
+                  value={circularForm.content}
+                  onChange={handleCircularChange}
+                ></textarea>
+                <label>
+  Upload Circular Photo (optional)
+</label>
+
+<input
+  type="file"
+  accept="image/*"
+  onChange={(e) =>
+    setCircularForm({
+      ...circularForm,
+      image: e.target.files[0]
+    })
+  }
+/>
+
+                <select
+                  name="target"
+                  value={circularForm.target}
+                  onChange={handleCircularChange}
+                >
+                  <option value="">Select Target</option>
+                  <option value="All">Everyone</option>
+                  <option value="All Mentors">All Mentors</option>
+                  <option value="All Mentees">All Mentees</option>
+                </select>
+
+                <button type="submit" className="submit-btn">
+                  Publish Circular
+                </button>
+
+              </form>
+
+              <div className="section-divider"></div>
+            </>
+          )}
+
+          <h2 className="section-heading">Available Circulars</h2>
+
+          {circulars.length === 0 ? (
+            <p>No circulars available.</p>
+          ) : (
+            circulars.map((circular) => {
+              const isVisible =
+                role === 'Admin' ||
+                role === 'HOD' ||
+                circular.target === 'All' ||
+                circular.target === 'All Mentors' ||
+                circular.target === 'All Mentees' ||
+                circular.target === loggedInMentor
+
+              if (!isVisible) {
+                return null
+              }
+
+              return (
+                <div className="result-card" key={circular.id}>
+                  <h3>{circular.title}</h3>
+
+                  <p>
+                    <strong>Target:</strong> {circular.target}
+                  </p>
+
+                  <p>{circular.content}</p>
+                  {circular.image_url && (
+  <img
+    src={circular.image_url}
+    alt="Circular"
+    style={{
+      width: '100%',
+      maxWidth: '600px',
+      marginTop: '15px',
+      borderRadius: '10px'
+    }}
+  />
+)}
+
+                  <small>
+                    Created by: {circular.created_by}
+                  </small>
+                </div>
+              )
+            })
+          )}
+
+        </div>
+
       </div>
     </div>
   )
@@ -1335,10 +1548,34 @@ if (activeSection === 'HODCertificates') {
                 </select>
                 <h3 className="sub-section-heading">Contact Information</h3>
 
-                <input type="text" placeholder="Phone Number" />
-                <input type="email" placeholder="Email Address" />
-                <input type="text" placeholder="Parent Phone Number" />
-                <textarea placeholder="Address" rows="4"></textarea>
+                <input
+  type="text"
+  name="phone"
+  placeholder="Phone Number"
+  value={studentForm.phone}
+  onChange={handleStudentChange}
+/>
+                <input
+  type="email"
+  name="email"
+  placeholder="Email Address"
+  value={studentForm.email}
+  onChange={handleStudentChange}
+/>
+                <input
+  type="text"
+  name="parentPhone"
+  placeholder="Parent Phone Number"
+  value={studentForm.parentPhone}
+  onChange={handleStudentChange}
+/>
+                <textarea
+  name="address"
+  placeholder="Address"
+  rows="4"
+  value={studentForm.address}
+  onChange={handleStudentChange}
+></textarea>
 
                 <h3 className="sub-section-heading">Academic Information</h3>
 
@@ -1839,12 +2076,21 @@ if (activeSection === 'Notices') {
               >
                 Notices
               </button>
+              <button
+  className={`nav-button ${activeSection === 'Circulars' ? 'active' : ''}`}
+  onClick={() => {
+    setActiveSection('Circulars')
+    fetchCirculars()
+  }}
+>
+  Circulars
+</button>
 
               <button
                 className={`nav-button ${activeSection === 'Analytics' ? 'active' : ''}`}
                 onClick={() => setActiveSection('Analytics')}
               >
-                📊 Analytics
+                 Analytics
               </button>
             </>
           )}
@@ -1874,6 +2120,15 @@ if (activeSection === 'Notices') {
     >
       Notices
     </button>
+    <button
+  className={`nav-button ${activeSection === 'Circulars' ? 'active' : ''}`}
+  onClick={() => {
+    setActiveSection('Circulars')
+    fetchCirculars()
+  }}
+>
+  Circulars
+</button>
   </>
 )}
 {role === 'HOD' && (
@@ -1921,6 +2176,15 @@ if (activeSection === 'Notices') {
   }}
 >
   Extracurricular Activities
+</button>
+<button
+  className={`nav-button ${activeSection === 'Circulars' ? 'active' : ''}`}
+  onClick={() => {
+    setActiveSection('Circulars')
+    fetchCirculars()
+  }}
+>
+  Circulars
 </button>
     <button
       className={`nav-button ${activeSection === 'Analytics' ? 'active' : ''}`}
