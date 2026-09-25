@@ -1,6 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
-import { mentordata } from './mentordata'
 import { supabase } from './supabase'
 import AnalyticsDashboard from './AnalyticsDashboard'
 function App() {
@@ -44,9 +43,8 @@ const [facultyForm, setFacultyForm] = useState({
   notes: ''
 })
 const [selectedMentor, setSelectedMentor] = useState('')
-const selectedMentorData = mentordata.find(
-  (item) => item.mentor === selectedMentor
-)
+const [mentorNames, setMentorNames] = useState([])
+const [assignedMentees, setAssignedMentees] = useState([])
 const [noticeForm, setNoticeForm] = useState({
   title: '',
   content: '',
@@ -73,6 +71,64 @@ const [isLoggedIn, setIsLoggedIn] = useState(false)
 const [role, setRole] = useState('')
 const [loggedInMentor, setLoggedInMentor] = useState('')
 const [selectedMenteeProfile, setSelectedMenteeProfile] = useState(null)
+const [attendanceForm, setAttendanceForm] = useState({
+  semester: '',
+  subject_code: '',
+  subject_name: '',
+  classes_attended: '',
+  total_classes: ''
+})
+const [menteeAttendance, setMenteeAttendance] = useState([])
+
+
+// Fetch the mentor names directly from the Supabase mentorMentee table
+useEffect(() => {
+  const fetchMentors = async () => {
+    const { data, error } = await supabase
+      .from('mentorMentee')
+      .select('mentor')
+
+    if (error) {
+      console.error('Error fetching mentors:', error)
+      return
+    }
+
+    const uniqueMentors = [
+      ...new Set((data || []).map((item) => item.mentor).filter(Boolean))
+    ].sort()
+
+    setMentorNames(uniqueMentors)
+  }
+
+  fetchMentors()
+}, [])
+
+// Fetch the mentees assigned to the logged-in or selected mentor from Supabase
+useEffect(() => {
+  const mentorToShow = role === 'Mentor' ? loggedInMentor : selectedMentor
+
+  if (!mentorToShow) {
+    setAssignedMentees([])
+    return
+  }
+
+  const fetchMentees = async () => {
+    const { data, error } = await supabase
+      .from('mentorMentee')
+      .select('*')
+      .eq('mentor', mentorToShow)
+
+    if (error) {
+      console.error('Error fetching mentees:', error)
+      setAssignedMentees([])
+      return
+    }
+
+    setAssignedMentees(data || [])
+  }
+
+  fetchMentees()
+}, [role, loggedInMentor, selectedMentor])
 
 const [notices, setNotices] = useState([])
 const [facultySearchQuery, setFacultySearchQuery] = useState('')
@@ -727,6 +783,16 @@ const handleLogin = () => {
     return
   }
 
+  // Clear any previously selected mentee when starting a new login session.
+  setSelectedMenteeProfile(null)
+  setMenteeAttendance([])
+  setAttendanceForm({
+    semester: '',
+    subject_code: '',
+    subject_name: '',
+    classes_attended: '',
+    total_classes: ''
+  })
   setIsLoggedIn(true)
 
   if (role === 'Admin') {
@@ -744,6 +810,17 @@ const handleLogout = () => {
   setIsLoggedIn(false)
   setRole('')
   setLoggedInMentor('')
+  setSelectedMentor('')
+  setSelectedMenteeProfile(null)
+  setMenteeAttendance([])
+  setAttendanceForm({
+    semester: '',
+    subject_code: '',
+    subject_name: '',
+    classes_attended: '',
+    total_classes: ''
+  })
+  setAssignedMentees([])
   setActiveSection('Dashboard')
 }
 const renderLoginPage = () => {
@@ -769,9 +846,9 @@ const renderLoginPage = () => {
               onChange={(e) => setLoggedInMentor(e.target.value)}
             >
               <option value="">Choose Mentor</option>
-              {mentordata.map((item, index) => (
-                <option key={index} value={item.mentor}>
-                  {item.mentor}
+              {mentorNames.map((mentor, index) => (
+                <option key={index} value={mentor}>
+                  {mentor}
                 </option>
               ))}
             </select>
@@ -785,24 +862,129 @@ const renderLoginPage = () => {
     </div>
   )
 }
-const handleMenteeClick = async (studentName) => {
+const fetchMenteeAttendance = async (usn) => {
   const { data, error } = await supabase
-    .from('students')
+    .from('attendance')
     .select('*')
-    .ilike('fullName', studentName)
+    .eq('usn', usn)
+    .order('semester', { ascending: true })
 
   if (error) {
-    console.error(error)
-    alert('Error fetching mentee details')
+    console.error('Attendance fetch error:', error)
+    alert('Error fetching attendance: ' + error.message)
+    setMenteeAttendance([])
     return
   }
 
-  if (data.length > 0) {
+  setMenteeAttendance(data || [])
+}
+
+const handleMenteeClick = async (studentUSN) => {
+  // Immediately clear the previous mentee while the newly clicked record loads.
+  setSelectedMenteeProfile(null)
+  setMenteeAttendance([])
+  setAttendanceForm({
+    semester: '',
+    subject_code: '',
+    subject_name: '',
+    classes_attended: '',
+    total_classes: ''
+  })
+
+  const { data, error } = await supabase
+    .from('students')
+    .select('*')
+    .eq('usn', studentUSN)
+    .limit(1)
+
+  if (error) {
+    console.error(error)
+    alert('Error fetching mentee details: ' + error.message)
+    return
+  }
+
+  if (data && data.length > 0) {
     setSelectedMenteeProfile(data[0])
+    await fetchMenteeAttendance(data[0].usn)
   } else {
     alert('Student details not found in database')
   }
 }
+
+const handleSaveAttendance = async (e) => {
+  e.preventDefault()
+
+  if (!selectedMenteeProfile) {
+    alert('Please select a mentee first')
+    return
+  }
+
+  const {
+    semester,
+    subject_code,
+    subject_name,
+    classes_attended,
+    total_classes
+  } = attendanceForm
+
+  const attended = Number(classes_attended)
+  const total = Number(total_classes)
+
+  if (
+    !semester ||
+    !subject_code.trim() ||
+    !subject_name.trim() ||
+    classes_attended === '' ||
+    total_classes === ''
+  ) {
+    alert('Please fill in all attendance fields')
+    return
+  }
+
+  if (
+    !Number.isInteger(attended) ||
+    !Number.isInteger(total) ||
+    attended < 0 ||
+    total < 0 ||
+    attended > total
+  ) {
+    alert('Enter valid attendance counts. Classes attended cannot exceed total classes.')
+    return
+  }
+
+  const attendanceData = {
+    usn: selectedMenteeProfile.usn,
+    student_name: selectedMenteeProfile.fullName,
+    semester: String(semester),
+    subject_code: subject_code.trim(),
+    subject_name: subject_name.trim(),
+    classes_attended: attended,
+    total_classes: total
+  }
+
+  const { error } = await supabase
+    .from('attendance')
+    .upsert(attendanceData, {
+      onConflict: 'usn,semester,subject_code'
+    })
+
+  if (error) {
+    console.error('Attendance save error:', error)
+    alert('Error saving attendance: ' + error.message)
+    return
+  }
+
+  alert('Attendance saved successfully!')
+  setAttendanceForm({
+    semester: '',
+    subject_code: '',
+    subject_name: '',
+    classes_attended: '',
+    total_classes: ''
+  })
+  await fetchMenteeAttendance(selectedMenteeProfile.usn)
+}
+
   const renderContent = () => {
     if (activeSection === 'Dashboard') {
   return (
@@ -1135,7 +1317,7 @@ if (activeSection === 'HODStudentRecords') {
           </p>
 
           <h2 className="section-heading">
-            🔍 Search Student
+             Search Student
           </h2>
 
           <div className="search-by-wrapper">
@@ -1485,8 +1667,8 @@ if (activeSection === 'HODCertificates') {
               <h1 className="main-title">Student Information Management System</h1>
                <p className="sub-title">Please fill in your details accurately</p>
               
-<h2 classname="section-heading" style={{ marginBottom: "10px" }}>🔍 Search Existing Student</h2>
-{/* 🔍 SEARCH BAR */}
+<h2 classname="section-heading" style={{ marginBottom: "10px" }}> Search Existing Student</h2>
+{/*  SEARCH BAR */}
 <div classname="search-by-wrapper" style={{ marginBottom: "20px" }}>
   <input
     type="text"
@@ -1642,7 +1824,7 @@ if (activeSection === 'HODCertificates') {
           <h1 className="main-title">Faculty Management System</h1>
           <p className="sub-title">Manage department faculty details</p>
 
-          <h2 className="section-heading"> 🔍 Search Existing Faculty</h2>
+          <h2 className="section-heading">  Search Existing Faculty</h2>
 
           <div className="search-bar-wrapper">
             <input
@@ -1807,126 +1989,228 @@ if (activeSection === 'HODCertificates') {
   )
 }
   if (activeSection === 'Mentor') {
-    const mentorToShow = role === 'Mentor' ? loggedInMentor : selectedMentor
-const mentorViewData = mentordata.find((item) => item.mentor === mentorToShow)
-  return (
-    <div className="student-page">
-      <div className="student-form-wrapper">
-        <div className="student-form-card">
-          <h1 className="main-title">Mentor–Mentee Management</h1>
-          <p className="sub-title">View mentor-wise assigned students</p>
+    return (
+      <div className="student-page">
+        <div className="student-form-wrapper">
+          <div className="student-form-card">
+            <h1 className="main-title">Mentor–Mentee Management</h1>
+            <p className="sub-title">View mentor-wise assigned students</p>
 
-          {role === 'Admin' ? (
-  <>
-    <h2 className="section-heading">Select Mentor</h2>
-    <select
-      value={selectedMentor}
-      onChange={(e) => setSelectedMentor(e.target.value)}
-    >
-      <option value="">Select Faculty Mentor</option>
-      {mentordata.map((item, index) => (
-        <option key={index} value={item.mentor}>
-          {item.mentor}
-        </option>
-      ))}
-    </select>
-  </>
-) : (
-  <>
-    <h2 className="section-heading">Logged in as Mentor</h2>
-    <div className="result-card">
-      <p><b>Mentor:</b> {loggedInMentor}</p>
-    </div>
-  </>
-)}
+            {role === 'Admin' ? (
+              <>
+                <h2 className="section-heading">Select Mentor</h2>
+                <select
+                  value={selectedMentor}
+                  onChange={(e) => {
+                    setSelectedMentor(e.target.value)
+                    setSelectedMenteeProfile(null)
+                    setMenteeAttendance([])
+                    setAttendanceForm({ semester: '', subject_code: '', subject_name: '', classes_attended: '', total_classes: '' })
+                  }}
+                >
+                  <option value="">Select Faculty Mentor</option>
+                  {mentorNames.map((mentor, index) => (
+                    <option key={index} value={mentor}>
+                      {mentor}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <>
+                <h2 className="section-heading">Logged in as Mentor</h2>
+                <div className="result-card">
+                  <p><b>Mentor:</b> {loggedInMentor}</p>
+                </div>
+              </>
+            )}
 
-          {mentorViewData && (
-            <>
-              <div className="section-divider"></div>
+            {(role === 'Mentor' && loggedInMentor) || (role === 'Admin' && selectedMentor) ? (
+              <>
+                <div className="section-divider"></div>
 
-              <h2 className="section-heading">2nd Year Mentees</h2>
+                <h2 className="section-heading">2nd Year Mentees</h2>
+                <div className="result-card">
+                  {assignedMentees.filter((mentee) => (mentee.year || '').startsWith('2nd Year')).length > 0 ? (
+                    assignedMentees
+                      .filter((mentee) => (mentee.year || '').startsWith('2nd Year'))
+                      .map((mentee, index) => (
+                        <p
+                          key={mentee.usn || index}
+                          onClick={() => handleMenteeClick(mentee.usn)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <b>{mentee.usn}</b> - {mentee.studentName}
+                        </p>
+                      ))
+                  ) : (
+                    <p>No 2nd year mentees</p>
+                  )}
+                </div>
+
+                <h2 className="section-heading">3rd Year Mentees</h2>
+                <div className="result-card">
+                  {assignedMentees.filter((mentee) => (mentee.year || '').startsWith('3rd Year')).length > 0 ? (
+                    assignedMentees
+                      .filter((mentee) => (mentee.year || '').startsWith('3rd Year'))
+                      .map((mentee, index) => (
+                        <p
+                          key={mentee.usn || index}
+                          onClick={() => handleMenteeClick(mentee.usn)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <b>{mentee.usn}</b> - {mentee.studentName}
+                        </p>
+                      ))
+                  ) : (
+                    <p>No 3rd year mentees</p>
+                  )}
+                </div>
+
+                <h2 className="section-heading">4th Year Mentees</h2>
+                <div className="result-card">
+                  {assignedMentees.filter((mentee) => (mentee.year || '').startsWith('4th Year')).length > 0 ? (
+                    assignedMentees
+                      .filter((mentee) => (mentee.year || '').startsWith('4th Year'))
+                      .map((mentee, index) => (
+                        <p
+                          key={mentee.usn || index}
+                          onClick={() => handleMenteeClick(mentee.usn)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <b>{mentee.usn}</b> - {mentee.studentName}
+                        </p>
+                      ))
+                  ) : (
+                    <p>No 4th year mentees</p>
+                  )}
+                </div>
+              </>
+            ) : (
               <div className="result-card">
-                {mentorViewData.secondYear.length > 0 ? (
-                  mentorViewData.secondYear.map((student, index) => (
-                    <p
-  key={index}
-  onClick={() => handleMenteeClick(student.name)}
-  style={{ cursor: 'pointer' }}
->
-  <b>{student.usn}</b> - {student.name}
-</p>
-                  ))
-                ) : (
-                  <p>No 2nd year mentees</p>
-                )}
+                <p>{role === 'Admin' ? 'Select a mentor to view assigned mentees.' : 'No mentor selected.'}</p>
               </div>
+            )}
 
-              <h2 className="section-heading">3rd Year Mentees</h2>
-              <div className="result-card">
-                {mentorViewData.thirdYear.length > 0 ? (
-                  mentorViewData.thirdYear.map((student, index) => (
-                    <p
-  key={index}
-  onClick={() => handleMenteeClick(student.name)}
-  style={{ cursor: 'pointer' }}
->
-  <b>{student.usn}</b> - {student.name}
-</p>
-                  ))
-                ) : (
-                  <p>No 3rd year mentees</p>
-                )}
-              </div>
+            {selectedMenteeProfile && (
+              <>
+                <div className="section-divider"></div>
+                <h2 className="section-heading">Mentee Academic Summary</h2>
+                <div className="result-card">
+                  <p><b>Name:</b> {selectedMenteeProfile.fullName}</p>
+                  <p><b>USN:</b> {selectedMenteeProfile.usn}</p>
+                  <p><b>Year:</b> {selectedMenteeProfile.year}</p>
+                  <p><b>Branch:</b> {selectedMenteeProfile.branch}</p>
+                  <p><b>10th Marks:</b> {selectedMenteeProfile.tenthMarks}</p>
+                  <p><b>12th Marks:</b> {selectedMenteeProfile.twelfthMarks}</p>
+                  <p><b>Sem 1:</b> {selectedMenteeProfile.sem1 || 'N/A'}</p>
+                  <p><b>Sem 2:</b> {selectedMenteeProfile.sem2 || 'N/A'}</p>
+                  <p><b>Sem 2:</b> {selectedMenteeProfile.sem2 || 'N/A'}</p>
+                  <p><b>Sem 3:</b> {selectedMenteeProfile.sem3 || 'N/A'}</p>
+                  <p><b>Sem 4:</b> {selectedMenteeProfile.sem4 || 'N/A'}</p>
+                  <p><b>Sem 5:</b> {selectedMenteeProfile.sem5 || 'N/A'}</p>
+                  <p><b>Sem 6:</b> {selectedMenteeProfile.sem6 || 'N/A'}</p>
+                  <p><b>Sem 7:</b> {selectedMenteeProfile.sem7 || 'N/A'}</p>
+                  <p><b>Sem 8:</b> {selectedMenteeProfile.sem8 || 'N/A'}</p>
+                  <p><b>Backlogs:</b> {selectedMenteeProfile.backlogs}</p>
+                  <p><b>Achievements:</b> {selectedMenteeProfile.achievements}</p>
+                </div>
 
-              <h2 className="section-heading">4th Year Mentees</h2>
-              <div className="result-card">
-                {mentorViewData.fourthYear.length > 0 ? (
-                  mentorViewData.fourthYear.map((student, index) => (
-                    <p
-  key={index}
-  onClick={() => handleMenteeClick(student.name)}
-  style={{ cursor: 'pointer' }}
->
-  <b>{student.usn}</b> - {student.name}
-</p>
-                  ))
-                ) : (
-                  <p>No 4th year mentees</p>
+                {role === 'Mentor' && (
+                  <>
+                    <div className="section-divider"></div>
+                    <h2 className="section-heading">Enter Mentee Attendance</h2>
+                    <div className="result-card">
+                      <p><b>Student:</b> {selectedMenteeProfile.fullName}</p>
+                      <p><b>USN:</b> {selectedMenteeProfile.usn}</p>
+                      <form className="student-form" onSubmit={handleSaveAttendance}>
+                        <label>Semester</label>
+                        <select
+                          value={attendanceForm.semester}
+                          onChange={(e) => setAttendanceForm({ ...attendanceForm, semester: e.target.value })}
+                          required
+                        >
+                          <option value="">Select Semester</option>
+                          {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
+                            <option key={sem} value={sem}>Semester {sem}</option>
+                          ))}
+                        </select>
+
+                        <label>Subject Code</label>
+                        <input
+                          type="text"
+                          placeholder="Enter subject code"
+                          value={attendanceForm.subject_code}
+                          onChange={(e) => setAttendanceForm({ ...attendanceForm, subject_code: e.target.value })}
+                          required
+                        />
+
+                        <label>Subject Name</label>
+                        <input
+                          type="text"
+                          placeholder="Enter subject name"
+                          value={attendanceForm.subject_name}
+                          onChange={(e) => setAttendanceForm({ ...attendanceForm, subject_name: e.target.value })}
+                          required
+                        />
+
+                        <label>Classes Attended</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="Classes attended"
+                          value={attendanceForm.classes_attended}
+                          onChange={(e) => setAttendanceForm({ ...attendanceForm, classes_attended: e.target.value })}
+                          required
+                        />
+
+                        <label>Total Classes</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="Total classes conducted"
+                          value={attendanceForm.total_classes}
+                          onChange={(e) => setAttendanceForm({ ...attendanceForm, total_classes: e.target.value })}
+                          required
+                        />
+
+                        <button type="submit" className="submit-btn">Save Attendance</button>
+                      </form>
+                    </div>
+
+                    <h2 className="section-heading">Attendance Records</h2>
+                    {menteeAttendance.length > 0 ? (
+                      menteeAttendance.map((record) => {
+                        const percentage = record.total_classes > 0
+                          ? (record.classes_attended / record.total_classes) * 100
+                          : 0
+                        return (
+                          <div className="result-card" key={record.id}>
+                            <p><b>Semester:</b> {record.semester}</p>
+                            <p><b>Subject:</b> {record.subject_name}</p>
+                            <p><b>Subject Code:</b> {record.subject_code}</p>
+                            <p><b>Classes Attended:</b> {record.classes_attended}</p>
+                            <p><b>Total Classes:</b> {record.total_classes}</p>
+                            <p><b>Attendance:</b> {percentage.toFixed(2)}%</p>
+                          </div>
+                        )
+                      })
+                    ) : (
+                      <div className="result-card">
+                        <p>No attendance records available for this mentee.</p>
+                      </div>
+                    )}
+                  </>
                 )}
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
       </div>
-      {selectedMenteeProfile && (
-  <>
-    <div className="section-divider"></div>
-
-    <h2 className="section-heading">Mentee Academic Summary</h2>
-
-    <div className="result-card">
-      <p><b>Name:</b> {selectedMenteeProfile.fullName}</p>
-      <p><b>USN:</b> {selectedMenteeProfile.usn}</p>
-      <p><b>Year:</b> {selectedMenteeProfile.year}</p>
-      <p><b>Branch:</b> {selectedMenteeProfile.branch}</p>
-      <p><b>10th Marks:</b> {selectedMenteeProfile.tenthMarks}</p>
-      <p><b>12th Marks:</b> {selectedMenteeProfile.twelfthMarks}</p>
-      <p><b>Sem 1:</b> {selectedMenteeProfile.sem1 || 'N/A'}</p>
-      <p><b>Sem 2:</b> {selectedMenteeProfile.sem2 || 'N/A'}</p>
-      <p><b>Sem 3:</b> {selectedMenteeProfile.sem3 || 'N/A'}</p>
-      <p><b>Sem 4:</b> {selectedMenteeProfile.sem4 || 'N/A'}</p>
-      <p><b>Sem 5:</b> {selectedMenteeProfile.sem5 || 'N/A'}</p>
-      <p><b>Sem 6:</b> {selectedMenteeProfile.sem6 || 'N/A'}</p>
-      <p><b>Sem 7:</b> {selectedMenteeProfile.sem7 || 'N/A'}</p>
-      <p><b>Sem 8:</b> {selectedMenteeProfile.sem8 || 'N/A'}</p>
-      <p><b>Backlogs:</b> {selectedMenteeProfile.backlogs}</p>
-      <p><b>Achievements:</b> {selectedMenteeProfile.achievements}</p>
-    </div>
-  </>
-)}
-    </div>
-  )
-}
+    )
+  }
 
 if (activeSection === 'Analytics') {
   return <AnalyticsDashboard />
