@@ -38,7 +38,7 @@ The application is designed for the **ISE Department** to simplify student, facu
 - PostgreSQL
 
 ### Data Visualization
-- Recharts
+- Charts.js
 
 ### Development Tools
 - Visual Studio Code
